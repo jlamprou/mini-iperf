@@ -69,7 +69,7 @@ def process_client(opt, args):
     t_start = time.time()
     transferred = 0
     while time.time() - t_start < opt.time:
-        s.send(buf)
+        s.send(buf.encode())
         transferred += opt.buflen
 
     t_total = time.time() - t_start
