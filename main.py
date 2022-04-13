@@ -340,7 +340,7 @@ def Main():
     parser.add_argument('-bs', '--buffsize',
                         help='Option which controls amound of data that is transmitted every datagram, default = 8000',
                         nargs='?', default=8000, type=int)
-    parser.add_argument('-t', '--time', help='ONLY SERVER option -> how much time measurment lasts, default = 10s',
+    parser.add_argument('-t', '--time', help='ONLY client option -> how much time measurment lasts, default = 10s',
                         default=10, nargs='?', type=int)
     parser.add_argument('-T', '--TCP', help='If you want to use TCP ', action='store_true', default=False)
     parser.add_argument('-U', '--UDP', help='If you want to use UDP', action='store_true', default=False)
