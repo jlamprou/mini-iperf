@@ -95,7 +95,7 @@ def ServerUDP(PORT, SNDB, BSIZE, HOST=0):
                     duration = (stop_time - start_time)
                     trafic = ((size * 8.0) / 1000000) / duration
                     print('Reading from socket in: (%f) s, : in (%d) segments (%d)((%f) mbit/s)\n' % (
-                    duration, count, size, trafic))
+                        duration, count, size, trafic))
                     break
 
             except socket.error as e:
@@ -229,34 +229,29 @@ def ServerTCP(PORT, SNDB, BSIZE, HOST=0):
     while 1:
         # wait to accept a connection - blocking call
         conn, addr = s.accept()
-
-        rcv = conn.recv(10)
-        foo = int(rcv.decode())
-        data = ('z' * buffsize).encode()
         print('Connected with ' + addr[0] + ':' + str(addr[1]))
-
-        i = 1
         count = 0  # Nr of segments received
         size = 0  # Size od data received
-        start_time = time.time()
+        start_time = time.time()  # Countdown starts here !
+
         while 1:
             try:
-                i += 1
-                count = count + 1
-                size += len(data.decode())
-                conn.send(data)
-                if (time.time() - start_time) > foo:
-                    stop_time = time.time()
-                    duration = stop_time - start_time
-                    trafic = ((size * 8.0) / 1000000) / duration
-                    print('Reading from socket in: (%f) s, : in (%d) segments (%d)((%f) mbit/s)\n' % (
-                    duration, count, size, trafic))
-                    conn.close()
-                    break
-
-            except socket.error as msg:
-                print('send error:', msg)
+                x = conn.recv(buffsize).decode()
+            except socket.error as elol:
+                print('Connection closed')
                 break
+
+            if not x:
+                break
+            data = len(x)
+            count = count + 1
+            size += data
+
+        stop_time = time.time()
+        duration = stop_time - start_time
+        trafic = ((size * 8.0) / 1000000) / duration
+        print(
+            'Reading from socket in: (%f) s, : in (%d) segments (%d)((%f) mbit/s)\n' % (duration, count, size, trafic))
 
     print('Sended %d segments \n' % i)
     s.close()
@@ -298,31 +293,29 @@ def ClientTCP(HOST, PORT, RECVB, BSIZE, TIME):
     print('Client MSS:', s.getsockopt(socket.SOL_TCP, socket.TCP_MAXSEG), '\n')
     print('Socket connect succesfully')
 
-    intro = str(tim).encode()
-
+    data = ('z' * buff).encode()
+    i = 1
     count = 0  # Nr of segments received
     size = 0  # Size od data received
-    start_time = time.time()  # Countdown starts here !
-
+    start_time = time.time()
     while 1:
         try:
-            s.send(intro)
-            x = s.recv(buff).decode()
-        except socket.error as elol:
-            print('Connection closed')
-            break
+            i += 1
+            count = count + 1
+            size += len(data.decode())
+            s.send(data)
+            if (time.time() - start_time) > tim:
+                stop_time = time.time()
+                duration = stop_time - start_time
+                trafic = ((size * 8.0) / 1000000) / duration
+                print('Reading from socket in: (%f) s, : in (%d) segments (%d)((%f) mbit/s)\n' % (
+                    duration, count, size, trafic))
+                s.close()
+                break
 
-        if not x:
+        except socket.error as msg:
+            print('send error:', msg)
             break
-        data = len(x)
-        count = count + 1
-        size += data
-
-    stop_time = time.time()
-    duration = stop_time - start_time
-    trafic = ((size * 8.0) / 1000000) / duration
-    print('Reading from socket in: (%f) s, : in (%d) segments (%d)((%f) mbit/s)\n' % (duration, count, size, trafic))
-    s.close()
 
 
 def Main():
