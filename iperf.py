@@ -12,7 +12,7 @@ def ServerUDP(PORT, SNDB, BSIZE, HOST=0):
     serv = HOST  # IP address which server expect the connection will come from
     port = PORT  # port = PORT  # Arbitrary non-privileged port
     sndbuff = SNDB  # Size of Socket RCVBUFFOR
-    buffsize = BSIZE  # size of data in udp datagram
+    buff = BSIZE  # size of data in udp datagram
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
     except socket.error as serror:
@@ -36,7 +36,7 @@ def ServerUDP(PORT, SNDB, BSIZE, HOST=0):
 
     try:
         if serv != '0.0.0.0':
-            s.bind((host, port))
+            s.bind((serv, port))
         elif serv == '0.0.0.0':
             s.bind(('', port))
     except socket.error as msg:
@@ -47,6 +47,10 @@ def ServerUDP(PORT, SNDB, BSIZE, HOST=0):
         sys.exit()
 
     print('Socket binding complete succesfully')
+
+
+    # here
+
 
     while 1:
         print('\n Waiting for connection request !')
@@ -73,39 +77,51 @@ def ServerUDP(PORT, SNDB, BSIZE, HOST=0):
         except Exception as msg:
             print('Error not related to socket occured ! Error: ', msg)
 
-        data = ('z' * buffsize).encode()
+        data = ('z' * buff).encode()
 
         print('user with address:  ', cliaddr[0], ' asked for packets ')
         print('user connected on port: ', cliaddr[1], '\n')
 
-        i = 0
+
         count = 0  # Nr of datagrams received
         size = 0  # Size od data received
-        start_time = time.time()
+        start_time = time.time()  # Countdown starts here !
+
         while 1:
             try:
-                i += 1
-                s.sendto(data, cliaddr)
-                count = count + 1
-                size += len(data)
-                if (time.time() - start_time) > foo:
-                    s.sendto('Last datagram'.encode(), cliaddr)
-                    print('Sended %d segments \n' % i)
-                    stop_time = time.time()
-                    duration = (stop_time - start_time)
-                    trafic = ((size * 8.0) / 1000000) / duration
-                    print('Reading from socket in: (%f) s, : in (%d) segments (%d)((%f) mbit/s)\n' % (
-                        duration, count, size, trafic))
-                    break
+                data, servaddr = s.recvfrom(buff)
 
-            except socket.error as e:
-                if socket.errno.ECONNRESET in e.args:
-                    print('Connection reseted by host side:', e)
+            except socket.error as elol:
+                if elol.args[0] in (socket.errno.EAGAIN, socket.errno.EWOULDBLOCK):
+                    print('Socket descriptor marked nonblocking and no data is waiting to be received')
+                    break
+                elif s.timeout:
+                    print('2 seconds lasted from last datagram sended by the server ! ')
+                    break
+                elif socket.errno.ECONNRESET in elol.args:
+                    print('Connection reseted by server side:', elol)
                     break
                 else:
-                    print('Error occured ! Error:', e)
+                    print('Unable to receive any data, Error:', elol)
+                    break
             except Exception as msg:
                 print('Error not related to socket occured ! Error: ', msg)
+
+            
+            if len(data)==13:
+                break
+            # print(len(data))
+
+            count = count + 1
+            size += len(data)
+
+        stop_time = time.time()
+        duration = (stop_time - start_time) - 2
+        trafic = ((size * 8.0) / 1000000) / duration
+        print('Reading from socket in: (%f) s, : in (%d) segments (%d)((%f) mbit/s)\n' % (duration, count, size, trafic))
+
+
+
 
     s.close()
 
@@ -138,13 +154,19 @@ def ClientUDP(HOST, PORT, RECVB, BSIZE, TIME):
     print('Client RCVBuff:', s.getsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF))
     print('Client SNDBuff:', s.getsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF))
 
+
+    data = ('z' * buff).encode()
+    
+
     ack_delivered = False
     while ack_delivered == False:
         intro = str(tim).encode()
         try:
             s.sendto(intro, (serv, port))
             ack, servaddr = s.recvfrom(10)
+            # foo = int(ack.decode())        
             ack = ack.decode()
+            #foo = 5
             if ack == 'ack':
                 ack_delivered = True
 
@@ -153,37 +175,37 @@ def ClientUDP(HOST, PORT, RECVB, BSIZE, TIME):
         except Exception as msg:
             print('Error not related to socket occured ! Error: ', msg)
 
+
+    i = 0
     count = 0  # Nr of datagrams received
     size = 0  # Size od data received
-    start_time = time.time()  # Countdown starts here !
-
+    start_time = time.time()
     while 1:
         try:
-            data, servaddr = s.recvfrom(buff)
+            i += 1
+            s.sendto(data, servaddr)
+            count = count + 1
+            size += len(data)
+            if (time.time() - start_time) > TIME:
+                s.sendto('Last datagram'.encode(), servaddr)
+                print('Sended %d segments \n' % i)
+                stop_time = time.time()
+                duration = (stop_time - start_time)
+                trafic = ((size * 8.0) / 1000000) / duration
+                print('Reading from socket in: (%f) s, : in (%d) segments (%d)((%f) mbit/s)\n' % (
+                    duration, count, size, trafic))
+                break
 
-        except socket.error as elol:
-            if elol.args[0] in (socket.errno.EAGAIN, socket.errno.EWOULDBLOCK):
-                print('Socket descriptor marked nonblocking and no data is waiting to be received')
-                break
-            elif s.timeout:
-                print('2 seconds lasted from last datagram sended by the server ! ')
-                break
-            elif socket.errno.ECONNRESET in elol.args:
-                print('Connection reseted by server side:', elol)
+        except socket.error as e:
+            if socket.errno.ECONNRESET in e.args:
+                print('Connection reseted by host side:', e)
                 break
             else:
-                print('Unable to receive any data, Error:', elol)
-                break
+                print('Error occured ! Error:', e)
         except Exception as msg:
             print('Error not related to socket occured ! Error: ', msg)
 
-        count = count + 1
-        size += len(data)
-
-    stop_time = time.time()
-    duration = (stop_time - start_time) - 2
-    trafic = ((size * 8.0) / 1000000) / duration
-    print('Reading from socket in: (%f) s, : in (%d) segments (%d)((%f) mbit/s)\n' % (duration, count, size, trafic))
+    
     s.close()
 
 
@@ -231,6 +253,7 @@ def ServerTCP(PORT, SNDB, BSIZE, HOST=0):
         conn, addr = s.accept()
         print('Connected with ' + addr[0] + ':' + str(addr[1]))
         count = 0  # Nr of segments received
+        lost = 0 # Nr of lost packets
         size = 0  # Size od data received
         start_time = time.time()  # Countdown starts here !
 
@@ -244,12 +267,15 @@ def ServerTCP(PORT, SNDB, BSIZE, HOST=0):
             if not x:
                 break
             data = len(x)
+            if (data == 0):
+                lost = lost + 1
             count = count + 1
             size += data
 
         stop_time = time.time()
         duration = stop_time - start_time
         trafic = ((size * 8.0) / 1000000) / duration
+        print('lost = '+str(lost))
         print(
             'Reading from socket in: (%f) s, : in (%d) segments (%d)((%f) mbit/s)\n' % (duration, count, size, trafic))
 
