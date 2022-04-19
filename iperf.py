@@ -147,7 +147,7 @@ def ServerUDP(PORT, RCVB, BSIZE, HOST=0):
     s.close()
 
 
-def ClientUDP(HOST, PORT, SNDB, BSIZE, TIME, BNDWIDTH):
+def ClientUDP(HOST, PORT, SNDB, BSIZE, TIME, BNDWIDTH,DELAY):
     serv = HOST  # IP addr of server to which we want to connect
     port = PORT  # port = PORT  # Arbitrary non-privileged port
     sndbuff = SNDB  # Size of Socket RCVBUFFOR
@@ -182,12 +182,14 @@ def ClientUDP(HOST, PORT, SNDB, BSIZE, TIME, BNDWIDTH):
     while ack_delivered == False:
         intro = str(tim).encode()
         try:
+            owd_start = time.time()
             s.sendto(intro, (serv, port))
             ack, servaddr = s.recvfrom(10)
             # foo = int(ack.decode())        
             ack = ack.decode()
             # foo = 5
             if ack == 'ack':
+                owd_end = time.time()
                 ack_delivered = True
 
         except socket.error as elol:
@@ -195,58 +197,65 @@ def ClientUDP(HOST, PORT, SNDB, BSIZE, TIME, BNDWIDTH):
         except Exception as msg:
             print('Error not related to socket occured ! Error: ', msg)
 
-    i = 0
-    count = 0  # Nr of datagrams received
-    size = 0  # Size od data received
-    start_time = time.time()
-    bytesAheadOfSchedule = 0
-    prevTime = None
-    while 1:
-        try:
-            if prevTime is not None:
-                bytesAheadOfSchedule -= ConvertSecondsToBytes(start_time - prevTime, bandwidth)
-            prevTime = start_time
-            packet = struct.pack(
-                '!HHIIBBHHH',
-                s.getsockname()[1],  # Source Port
-                port,  # Destination Port
-                count,  # Sequence Number
-                0,  # Acknoledgement Number
-                5 << 4,  # Data Offset
-                0,  # Flags
-                0,  # Window
-                0,  # Checksum (initial value)
-                0  # Urgent pointer
-            )
-            i += 1
-            numBytesSent = s.sendto(packet + data, servaddr)
-            if numBytesSent > 0:
-                bytesAheadOfSchedule += numBytesSent
-                if bytesAheadOfSchedule > 0:
-                    time.sleep(ConvertBytesToSeconds(bytesAheadOfSchedule, bandwidth))
-            else:
-                print("Error sending data, exiting!")
-                break
-            count = count + 1
-            size += len(data)
-            if (time.time() - start_time) > tim:
-                s.sendto('Last datagram'.encode(), servaddr)
-                print('Sended %d segments \n' % i)
-                stop_time = time.time()
-                duration = (stop_time - start_time)
-                trafic = (size * 0.001) / duration
-                print('Reading from socket in: (%f) s, : in (%d) segments (%d)((%f) K/s)\n' % (
-                    duration, count, size, trafic))
-                break
+    if DELAY == 1:
+        print('One way delay: '+str(owd_end - owd_start))
+    else :
 
-        except socket.error as e:
-            if socket.errno.ECONNRESET in e.args:
-                print('Connection reseted by host side:', e)
-                break
-            else:
-                print('Error occured ! Error:', e)
-        except Exception as msg:
-            print('Error not related to socket occured ! Error: ', msg)
+    
+
+
+        i = 0
+        count = 0  # Nr of datagrams received
+        size = 0  # Size od data received
+        start_time = time.time()
+        bytesAheadOfSchedule = 0
+        prevTime = None
+        while 1:
+            try:
+                if prevTime is not None:
+                    bytesAheadOfSchedule -= ConvertSecondsToBytes(start_time - prevTime, bandwidth)
+                prevTime = start_time
+                packet = struct.pack(
+                    '!HHIIBBHHH',
+                    s.getsockname()[1],  # Source Port
+                    port,  # Destination Port
+                    count,  # Sequence Number
+                    0,  # Acknoledgement Number
+                    5 << 4,  # Data Offset
+                    0,  # Flags
+                    0,  # Window
+                    0,  # Checksum (initial value)
+                    0  # Urgent pointer
+                )
+                i += 1
+                numBytesSent = s.sendto(packet + data, servaddr)
+                if numBytesSent > 0:
+                    bytesAheadOfSchedule += numBytesSent
+                    if bytesAheadOfSchedule > 0:
+                        time.sleep(ConvertBytesToSeconds(bytesAheadOfSchedule, bandwidth))
+                else:
+                    print("Error sending data, exiting!")
+                    break
+                count = count + 1
+                size += len(data)
+                if (time.time() - start_time) > tim:
+                    s.sendto('Last datagram'.encode(), servaddr)
+                    print('Sended %d segments \n' % i)
+                    stop_time = time.time()
+                    duration = (stop_time - start_time)
+                    trafic = (size * 0.001) / duration
+                    print('Reading from socket in: (%f) s, : in (%d) segments (%d)((%f) K/s)\n' % (
+                        duration, count, size, trafic))
+                    break
+
+            except socket.error as e:
+                if socket.errno.ECONNRESET in e.args:
+                    print('Connection reseted by host side:', e)
+                    break
+                else:
+                    print('Error occured ! Error:', e)
+            except Exception as msg:
+                print('Error not related to socket occured ! Error: ', msg)
 
     s.close()
 
@@ -325,7 +334,7 @@ def ServerTCP(PORT, RCVB, BSIZE, HOST=0):
     s.close()
 
 
-def ClientTCP(HOST, PORT, SNDB, BSIZE, TIME):
+def ClientTCP(HOST, PORT, SNDB, BSIZE, TIME,DELAY):
     port = PORT  # port = PORT  # Arbitrary non-privileged port
     sendbuff = SNDB  # Size of Socket RCVBUFFOR
     buff = BSIZE  # size of data in tcp seg
@@ -384,7 +393,14 @@ def ClientTCP(HOST, PORT, SNDB, BSIZE, TIME):
             i += 1
             count = count + 1
             size += len(data.decode())
+            owd_start = time.time()
             s.send(packet + data)
+            owd_end = time.time()
+
+            if DELAY == 1:
+                print('One way delay: '+str(owd_end - owd_start))
+                break
+            
             if (time.time() - start_time) > tim:
                 stop_time = time.time()
                 duration = stop_time - start_time
@@ -420,6 +436,7 @@ def Main():
                         default=10, nargs='?', type=int)
     parser.add_argument('-T', '--TCP', help='If you want to use TCP ', action='store_true', default=False)
     parser.add_argument('-U', '--UDP', help='If you want to use UDP', action='store_true', default=False)
+    parser.add_argument('-d', '--owd', help='One way delay', action='store_true', default=False)
 
     args = parser.parse_args()
 
@@ -428,9 +445,9 @@ def Main():
     elif args.server and args.UDP and not args.client and not args.TCP:
         ServerUDP(args.port, args.window, args.buffsize, args.ip)
     elif args.client and args.UDP and not args.server and not args.TCP:
-        ClientUDP(args.ip, args.port, args.window, args.buffsize, args.time, args.bandwidth)
+        ClientUDP(args.ip, args.port, args.window, args.buffsize, args.time, args.bandwidth,args.owd)
     elif args.client and args.TCP and not args.server and not args.UDP:
-        ClientTCP(args.ip, args.port, args.window, args.buffsize, args.time)
+        ClientTCP(args.ip, args.port, args.window, args.buffsize, args.time,args.owd)
     elif args.TCP and args.UDP:
         print('You should chose either TCP or UDP ! ')
     elif args.server and args.client:
