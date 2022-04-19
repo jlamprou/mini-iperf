@@ -198,7 +198,7 @@ def ClientUDP(HOST, PORT, SNDB, BSIZE, TIME, BNDWIDTH,DELAY):
             print('Error not related to socket occured ! Error: ', msg)
 
     if DELAY == 1:
-        print('One way delay: '+str(owd_end - owd_start))
+        print('One way delay: ',((owd_end - owd_start)/2))
     else :
 
     
@@ -398,9 +398,9 @@ def ClientTCP(HOST, PORT, SNDB, BSIZE, TIME,DELAY):
             owd_end = time.time()
 
             if DELAY == 1:
-                print('One way delay: '+str(owd_end - owd_start))
+                print('One way delay: ',((owd_end - owd_start)/2))
                 break
-            
+
             if (time.time() - start_time) > tim:
                 stop_time = time.time()
                 duration = stop_time - start_time
