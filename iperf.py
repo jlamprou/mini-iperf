@@ -97,7 +97,8 @@ def ServerUDP(PORT, SNDB, BSIZE, HOST=0):
         count = 0  # Nr of datagrams received
         size = 0  # Size od data received
         start_time = time.time()  # Countdown starts here !
-
+        flag = 1
+        jitter = 0
         while 1:
             try:
                 data, servaddr = s.recvfrom(buff)
@@ -122,6 +123,15 @@ def ServerUDP(PORT, SNDB, BSIZE, HOST=0):
             if len(data) == 13:
                 break
             # print(len(data))
+            if (flag == 1):
+                prev_time = time.time()
+                flag = 0
+            else: 
+                curr_time = time.time()
+                flag = 1
+                jitter =+ curr_time - prev_time
+                
+
             header = data[:20]
             data = data[20:]
             header = struct.unpack("!HHIIBBHHH", header)
@@ -138,6 +148,8 @@ def ServerUDP(PORT, SNDB, BSIZE, HOST=0):
         print(
             'Reading from socket in: (%f) s, : in (%d) segments (%d)((%f) mbit/s)\n' % (duration, count, size, trafic))
         print("Lost Datagrams: ",lostdatagrams)
+        jitter = (jitter / count)
+        print('Average Jitter : '+str(jitter)+' ms')
 
     s.close()
 
