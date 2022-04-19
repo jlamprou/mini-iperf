@@ -130,6 +130,8 @@ def ServerUDP(PORT, RCVB, BSIZE, HOST=0):
             header = data[:20]
             data = data[20:]
             header = struct.unpack("!HHIIBBHHH", header)
+            print('last '+str(last_datagram_sequence))
+            print('curr '+str(header[2]))
             lostdatagrams = lostdatagrams + (header[2] - last_datagram_sequence - 1)
             last_datagram_sequence = header[2]
             count = count + 1
