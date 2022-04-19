@@ -138,9 +138,11 @@ def ServerUDP(PORT, RCVB, BSIZE, HOST=0):
         stop_time = time.time()
         duration = (stop_time - start_time)
         trafic = (size * 0.001) / duration
+        if lostdatagrams == -1:
+            lostdatagrams = 0
         print(
             'Reading from socket in: (%f) s, : in (%d) segments (%d)((%f) K/s)\n' % (duration, count, size, trafic))
-        print("Lost Datagrams: ", lostdatagrams)
+        print("Lost Datagrams Percentage: ", lostdatagrams*100/last_datagram_sequence," %")
         jitter = (jitter / count)
         print('Average Jitter : ' + str(jitter) + ' ms')
 
@@ -326,7 +328,7 @@ def ServerTCP(PORT, RCVB, BSIZE, HOST=0):
         stop_time = time.time()
         duration = stop_time - start_time
         trafic = (size * 0.001) / duration
-        print('lost = ' + str(lost))
+        # print('lost = ' + str(lost))
         print(
             'Reading from socket in: (%f) s, : in (%d) segments (%d)((%f) K/s)\n' % (duration, count, size, trafic))
 
