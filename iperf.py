@@ -9,22 +9,18 @@ import sys
 import time
 
 
-# - added type hints
-def chksum(packet: bytes) -> int:
-    if len(packet) % 2 != 0:
-        packet += b'\0'
-
-    res = sum(array.array("H", packet))
-    res = (res >> 16) + (res & 0xffff)
-    res += res >> 16
-
-    return (~res) & 0xffff
+def ConvertSecondsToBytes(numSeconds, maxSendRateBytesPerSecond):
+    return numSeconds * maxSendRateBytesPerSecond
 
 
-def ServerUDP(PORT, SNDB, BSIZE, HOST=0):
+def ConvertBytesToSeconds(numBytes, maxSendRateBytesPerSecond):
+    return float(numBytes) / maxSendRateBytesPerSecond
+
+
+def ServerUDP(PORT, RCVB, BSIZE, HOST=0):
     serv = HOST  # IP address which server expect the connection will come from
     port = PORT  # port = PORT  # Arbitrary non-privileged port
-    sndbuff = SNDB  # Size of Socket RCVBUFFOR
+    rcvbuff = RCVB  # Size of Socket RCVBUFFOR
     buff = BSIZE  # size of data in udp datagram
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
@@ -35,7 +31,7 @@ def ServerUDP(PORT, SNDB, BSIZE, HOST=0):
 
     try:
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        s.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, sndbuff)
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, rcvbuff)
 
     except socket.error as setsckerror:
         print('Unable to set socket options ! Error: ', setsckerror, '\n')
@@ -126,11 +122,10 @@ def ServerUDP(PORT, SNDB, BSIZE, HOST=0):
             if (flag == 1):
                 prev_time = time.time()
                 flag = 0
-            else: 
+            else:
                 curr_time = time.time()
                 flag = 1
-                jitter =+ curr_time - prev_time
-                
+                jitter = + curr_time - prev_time
 
             header = data[:20]
             data = data[20:]
@@ -142,23 +137,23 @@ def ServerUDP(PORT, SNDB, BSIZE, HOST=0):
 
         stop_time = time.time()
         duration = (stop_time - start_time)
-        trafic = ((size * 8.0) / 1000000) / duration
+        trafic = (size * 0.001) / duration
         print(
-            'Reading from socket in: (%f) s, : in (%d) segments (%d)((%f) mbit/s)\n' % (duration, count, size, trafic))
+            'Reading from socket in: (%f) s, : in (%d) segments (%d)((%f) K/s)\n' % (duration, count, size, trafic))
         print("Lost Datagrams: ", lostdatagrams)
         jitter = (jitter / count)
-        print('Average Jitter : '+str(jitter)+' ms')
-
+        print('Average Jitter : ' + str(jitter) + ' ms')
 
     s.close()
 
 
-def ClientUDP(HOST, PORT, RECVB, BSIZE, TIME):
+def ClientUDP(HOST, PORT, SNDB, BSIZE, TIME, BNDWIDTH):
     serv = HOST  # IP addr of server to which we want to connect
     port = PORT  # port = PORT  # Arbitrary non-privileged port
-    rcvbuff = RECVB  # Size of Socket RCVBUFFOR
+    sndbuff = SNDB  # Size of Socket RCVBUFFOR
     buff = BSIZE  # size of data in udp datagram
     tim = TIME
+    bandwidth = BNDWIDTH
 
     data = ('z' * buff).encode()
 
@@ -173,7 +168,7 @@ def ClientUDP(HOST, PORT, RECVB, BSIZE, TIME):
     print('Socket created \n')
 
     try:
-        s.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, rcvbuff)
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, sndbuff)
         s.settimeout(2)
     except socket.error as sckerror:
         print('Setting socket option failed ! Error: ', sckerror, '\n')
@@ -204,8 +199,13 @@ def ClientUDP(HOST, PORT, RECVB, BSIZE, TIME):
     count = 0  # Nr of datagrams received
     size = 0  # Size od data received
     start_time = time.time()
+    bytesAheadOfSchedule = 0
+    prevTime = None
     while 1:
         try:
+            if prevTime is not None:
+                bytesAheadOfSchedule -= ConvertSecondsToBytes(start_time - prevTime, bandwidth)
+            prevTime = start_time
             packet = struct.pack(
                 '!HHIIBBHHH',
                 s.getsockname()[1],  # Source Port
@@ -214,13 +214,19 @@ def ClientUDP(HOST, PORT, RECVB, BSIZE, TIME):
                 0,  # Acknoledgement Number
                 5 << 4,  # Data Offset
                 0,  # Flags
-                buff,  # Window
+                0,  # Window
                 0,  # Checksum (initial value)
                 0  # Urgent pointer
             )
-            print(struct.unpack("!HHIIBBHHH", packet))
             i += 1
-            s.sendto(packet + data, servaddr)
+            numBytesSent = s.sendto(packet + data, servaddr)
+            if numBytesSent > 0:
+                bytesAheadOfSchedule += numBytesSent
+                if bytesAheadOfSchedule > 0:
+                    time.sleep(ConvertBytesToSeconds(bytesAheadOfSchedule, bandwidth))
+            else:
+                print("Error sending data, exiting!")
+                break
             count = count + 1
             size += len(data)
             if (time.time() - start_time) > tim:
@@ -228,8 +234,8 @@ def ClientUDP(HOST, PORT, RECVB, BSIZE, TIME):
                 print('Sended %d segments \n' % i)
                 stop_time = time.time()
                 duration = (stop_time - start_time)
-                trafic = ((size * 8.0) / 1000000) / duration
-                print('Reading from socket in: (%f) s, : in (%d) segments (%d)((%f) mbit/s)\n' % (
+                trafic = (size * 0.001) / duration
+                print('Reading from socket in: (%f) s, : in (%d) segments (%d)((%f) K/s)\n' % (
                     duration, count, size, trafic))
                 break
 
@@ -245,10 +251,10 @@ def ClientUDP(HOST, PORT, RECVB, BSIZE, TIME):
     s.close()
 
 
-def ServerTCP(PORT, SNDB, BSIZE, HOST=0):
+def ServerTCP(PORT, RCVB, BSIZE, HOST=0):
     host = HOST  # IP address which server expect the connection will come from
     port = PORT  # PORT nr. on which server will be open for clients
-    sndbuff = SNDB  # size of socket SEND buffor
+    recvbuff = RCVB  # size of socket SEND buffor
     buffsize = BSIZE  # size od data in tcp segment
 
     try:
@@ -258,7 +264,7 @@ def ServerTCP(PORT, SNDB, BSIZE, HOST=0):
 
     try:
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        s.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, sndbuff)
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, recvbuff)
         l_onoff = 1
         l_linger = 0
         s.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack('ii', l_onoff, l_linger))
@@ -296,10 +302,6 @@ def ServerTCP(PORT, SNDB, BSIZE, HOST=0):
         while 1:
             try:
                 x = conn.recv(buffsize)
-                header = x[:20]
-                data = x[20:]
-                header = struct.unpack("!HHIIBBHHH", header)
-                print(header)
 
             except socket.error as elol:
                 print('Connection closed')
@@ -307,24 +309,25 @@ def ServerTCP(PORT, SNDB, BSIZE, HOST=0):
 
             if not x:
                 break
+
             data = len(x)
             count = count + 1
             size += data
 
         stop_time = time.time()
         duration = stop_time - start_time
-        trafic = ((size * 8.0) / 1000000) / duration
+        trafic = (size * 0.001) / duration
         print('lost = ' + str(lost))
         print(
-            'Reading from socket in: (%f) s, : in (%d) segments (%d)((%f) mbit/s)\n' % (duration, count, size, trafic))
+            'Reading from socket in: (%f) s, : in (%d) segments (%d)((%f) K/s)\n' % (duration, count, size, trafic))
 
     print('Sended %d segments \n' % i)
     s.close()
 
 
-def ClientTCP(HOST, PORT, RECVB, BSIZE, TIME):
+def ClientTCP(HOST, PORT, SNDB, BSIZE, TIME):
     port = PORT  # port = PORT  # Arbitrary non-privileged port
-    rcvbuff = RECVB  # Size of Socket RCVBUFFOR
+    sendbuff = SNDB  # Size of Socket RCVBUFFOR
     buff = BSIZE  # size of data in tcp seg
     host = HOST  # IP addr of server to which we want to connect
     tim = TIME
@@ -338,7 +341,7 @@ def ClientTCP(HOST, PORT, RECVB, BSIZE, TIME):
 
     # Bind socket to local host and port
     try:
-        s.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, rcvbuff)
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, sendbuff)
     except socket.error as sckerror:
         print('Setting socket option failed ! Error: ', sckerror, '\n')
 
@@ -374,11 +377,10 @@ def ClientTCP(HOST, PORT, RECVB, BSIZE, TIME):
                 0,  # Acknoledgement Number
                 5 << 4,  # Data Offset
                 0,  # Flags
-                buff,  # Window
+                0,  # Window
                 0,  # Checksum (initial value)
                 0  # Urgent pointer
             )
-            print(struct.unpack("!HHIIBBHHH", packet))
             i += 1
             count = count + 1
             size += len(data.decode())
@@ -386,8 +388,8 @@ def ClientTCP(HOST, PORT, RECVB, BSIZE, TIME):
             if (time.time() - start_time) > tim:
                 stop_time = time.time()
                 duration = stop_time - start_time
-                trafic = ((size * 8.0) / 1000000) / duration
-                print('Reading from socket in: (%f) s, : in (%d) segments (%d)((%f) mbit/s)\n' % (
+                trafic = (size * 0.001) / duration
+                print('Reading from socket in: (%f) s, : in (%d) segments (%d)((%f) K/s)\n' % (
                     duration, count, size, trafic))
                 s.close()
                 break
@@ -406,12 +408,14 @@ def Main():
                         help='host/serv ip address, if you write ip address on server, server will expect connection only from this particular IP, if multicast is enabled and we '
                              ' pass something here, server will bind with mcastgrp addr ! ', nargs='?', type=str,
                         default='0.0.0.0')
+    parser.add_argument('-b', '--bandwidth', help='Bandwidth bits per sec', type=int, default=1000,
+                        nargs='?')
     parser.add_argument('-p', '--port', help='Port number, default port nr. is 8888', type=int, default=8888, nargs='?')
-    parser.add_argument('-l', '--len', help='Lenght of buffers to read and write, default = 128000', nargs='?',
+    parser.add_argument('-w', '--window', help='Lenght of buffers to read and write, default = 128000', nargs='?',
                         default=128000, type=int)
     parser.add_argument('-bs', '--buffsize',
                         help='Option which controls amound of data that is transmitted every datagram, default = 8000',
-                        nargs='?', default=8000, type=int)
+                        nargs='?', default=10000, type=int)
     parser.add_argument('-t', '--time', help='ONLY client option -> how much time measurment lasts, default = 10s',
                         default=10, nargs='?', type=int)
     parser.add_argument('-T', '--TCP', help='If you want to use TCP ', action='store_true', default=False)
@@ -420,13 +424,13 @@ def Main():
     args = parser.parse_args()
 
     if args.server and args.TCP and not args.client and not args.UDP:
-        ServerTCP(args.port, args.len, args.buffsize, args.ip)
+        ServerTCP(args.port, args.window, args.buffsize, args.ip)
     elif args.server and args.UDP and not args.client and not args.TCP:
-        ServerUDP(args.port, args.len, args.buffsize, args.ip)
+        ServerUDP(args.port, args.window, args.buffsize, args.ip)
     elif args.client and args.UDP and not args.server and not args.TCP:
-        ClientUDP(args.ip, args.port, args.len, args.buffsize, args.time)
+        ClientUDP(args.ip, args.port, args.window, args.buffsize, args.time, args.bandwidth)
     elif args.client and args.TCP and not args.server and not args.UDP:
-        ClientTCP(args.ip, args.port, args.len, args.buffsize, args.time)
+        ClientTCP(args.ip, args.port, args.window, args.buffsize, args.time)
     elif args.TCP and args.UDP:
         print('You should chose either TCP or UDP ! ')
     elif args.server and args.client:
