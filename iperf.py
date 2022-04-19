@@ -145,13 +145,10 @@ def ServerUDP(PORT, SNDB, BSIZE, HOST=0):
         trafic = ((size * 8.0) / 1000000) / duration
         print(
             'Reading from socket in: (%f) s, : in (%d) segments (%d)((%f) mbit/s)\n' % (duration, count, size, trafic))
-<<<<<<< HEAD
         print("Lost Datagrams: ", lostdatagrams)
         jitter = (jitter / count)
         print('Average Jitter : '+str(jitter)+' ms')
-=======
 
->>>>>>> 3104d48d1c815b50ef166c211901cc18de49abfb
 
     s.close()
 
