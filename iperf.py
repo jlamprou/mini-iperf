@@ -125,8 +125,8 @@ def ServerUDP(PORT, SNDB, BSIZE, HOST=0):
             header = data[:20]
             data = data[20:]
             header = struct.unpack("!HHIIBBHHH", header)
-            if (last_datagram_sequence - header[3]) > 1:
-                lostdatagrams += 1
+            if (header[3] - last_datagram_sequence) > 1:
+                lostdatagrams += header[3] - last_datagram_sequence
             last_datagram_sequence = header[3]
             print(header)
             count = count + 1
