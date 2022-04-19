@@ -2,10 +2,23 @@
 
 
 import argparse
+import array
 import socket
 import struct
 import sys
 import time
+
+
+# - added type hints
+def chksum(packet: bytes) -> int:
+    if len(packet) % 2 != 0:
+        packet += b'\0'
+
+    res = sum(array.array("H", packet))
+    res = (res >> 16) + (res & 0xffff)
+    res += res >> 16
+
+    return (~res) & 0xffff
 
 
 def ServerUDP(PORT, SNDB, BSIZE, HOST=0):
@@ -48,9 +61,7 @@ def ServerUDP(PORT, SNDB, BSIZE, HOST=0):
 
     print('Socket binding complete succesfully')
 
-
     # here
-
 
     while 1:
         print('\n Waiting for connection request !')
@@ -81,8 +92,8 @@ def ServerUDP(PORT, SNDB, BSIZE, HOST=0):
 
         print('user with address:  ', cliaddr[0], ' asked for packets ')
         print('user connected on port: ', cliaddr[1], '\n')
-
-
+        lostdatagrams = 0
+        last_datagram_sequence = 0
         count = 0  # Nr of datagrams received
         size = 0  # Size od data received
         start_time = time.time()  # Countdown starts here !
@@ -90,6 +101,7 @@ def ServerUDP(PORT, SNDB, BSIZE, HOST=0):
         while 1:
             try:
                 data, servaddr = s.recvfrom(buff)
+
 
             except socket.error as elol:
                 if elol.args[0] in (socket.errno.EAGAIN, socket.errno.EWOULDBLOCK):
@@ -107,21 +119,25 @@ def ServerUDP(PORT, SNDB, BSIZE, HOST=0):
             except Exception as msg:
                 print('Error not related to socket occured ! Error: ', msg)
 
-            
-            if len(data)==13:
+            if len(data) == 13:
                 break
             # print(len(data))
-
+            header = data[:20]
+            data = data[20:]
+            header = struct.unpack("!HHIIBBHHH", header)
+            if (last_datagram_sequence - header[3]) > 1:
+                lostdatagrams += 1
+            last_datagram_sequence = header[3]
+            print(header)
             count = count + 1
             size += len(data)
 
         stop_time = time.time()
-        duration = (stop_time - start_time) - 2
+        duration = (stop_time - start_time)
         trafic = ((size * 8.0) / 1000000) / duration
-        print('Reading from socket in: (%f) s, : in (%d) segments (%d)((%f) mbit/s)\n' % (duration, count, size, trafic))
-
-
-
+        print(
+            'Reading from socket in: (%f) s, : in (%d) segments (%d)((%f) mbit/s)\n' % (duration, count, size, trafic))
+        print("Lost Datagrams: ",lostdatagrams)
 
     s.close()
 
@@ -132,6 +148,8 @@ def ClientUDP(HOST, PORT, RECVB, BSIZE, TIME):
     rcvbuff = RECVB  # Size of Socket RCVBUFFOR
     buff = BSIZE  # size of data in udp datagram
     tim = TIME
+
+    data = ('z' * buff).encode()
 
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
@@ -154,10 +172,6 @@ def ClientUDP(HOST, PORT, RECVB, BSIZE, TIME):
     print('Client RCVBuff:', s.getsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF))
     print('Client SNDBuff:', s.getsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF))
 
-
-    data = ('z' * buff).encode()
-    
-
     ack_delivered = False
     while ack_delivered == False:
         intro = str(tim).encode()
@@ -166,7 +180,7 @@ def ClientUDP(HOST, PORT, RECVB, BSIZE, TIME):
             ack, servaddr = s.recvfrom(10)
             # foo = int(ack.decode())        
             ack = ack.decode()
-            #foo = 5
+            # foo = 5
             if ack == 'ack':
                 ack_delivered = True
 
@@ -175,18 +189,30 @@ def ClientUDP(HOST, PORT, RECVB, BSIZE, TIME):
         except Exception as msg:
             print('Error not related to socket occured ! Error: ', msg)
 
-
     i = 0
     count = 0  # Nr of datagrams received
     size = 0  # Size od data received
     start_time = time.time()
     while 1:
         try:
+            packet = struct.pack(
+                '!HHIIBBHHH',
+                s.getsockname()[1],  # Source Port
+                port,  # Destination Port
+                count,  # Sequence Number
+                0,  # Acknoledgement Number
+                5 << 4,  # Data Offset
+                0,  # Flags
+                buff,  # Window
+                0,  # Checksum (initial value)
+                0  # Urgent pointer
+            )
+            print(struct.unpack("!HHIIBBHHH", packet))
             i += 1
-            s.sendto(data, servaddr)
+            s.sendto(packet + data, servaddr)
             count = count + 1
             size += len(data)
-            if (time.time() - start_time) > TIME:
+            if (time.time() - start_time) > tim:
                 s.sendto('Last datagram'.encode(), servaddr)
                 print('Sended %d segments \n' % i)
                 stop_time = time.time()
@@ -205,7 +231,6 @@ def ClientUDP(HOST, PORT, RECVB, BSIZE, TIME):
         except Exception as msg:
             print('Error not related to socket occured ! Error: ', msg)
 
-    
     s.close()
 
 
@@ -253,13 +278,18 @@ def ServerTCP(PORT, SNDB, BSIZE, HOST=0):
         conn, addr = s.accept()
         print('Connected with ' + addr[0] + ':' + str(addr[1]))
         count = 0  # Nr of segments received
-        lost = 0 # Nr of lost packets
+        lost = 0  # Nr of lost packets
         size = 0  # Size od data received
         start_time = time.time()  # Countdown starts here !
 
         while 1:
             try:
-                x = conn.recv(buffsize).decode()
+                x = conn.recv(buffsize)
+                header = x[:20]
+                data = x[20:]
+                header = struct.unpack("!HHIIBBHHH", header)
+                print(header)
+
             except socket.error as elol:
                 print('Connection closed')
                 break
@@ -267,15 +297,13 @@ def ServerTCP(PORT, SNDB, BSIZE, HOST=0):
             if not x:
                 break
             data = len(x)
-            if (data == 0):
-                lost = lost + 1
             count = count + 1
             size += data
 
         stop_time = time.time()
         duration = stop_time - start_time
         trafic = ((size * 8.0) / 1000000) / duration
-        print('lost = '+str(lost))
+        print('lost = ' + str(lost))
         print(
             'Reading from socket in: (%f) s, : in (%d) segments (%d)((%f) mbit/s)\n' % (duration, count, size, trafic))
 
@@ -320,16 +348,30 @@ def ClientTCP(HOST, PORT, RECVB, BSIZE, TIME):
     print('Socket connect succesfully')
 
     data = ('z' * buff).encode()
+
     i = 1
     count = 0  # Nr of segments received
     size = 0  # Size od data received
     start_time = time.time()
     while 1:
         try:
+            packet = struct.pack(
+                '!HHIIBBHHH',
+                s.getsockname()[1],  # Source Port
+                port,  # Destination Port
+                count,  # Sequence Number
+                0,  # Acknoledgement Number
+                5 << 4,  # Data Offset
+                0,  # Flags
+                buff,  # Window
+                0,  # Checksum (initial value)
+                0  # Urgent pointer
+            )
+            print(struct.unpack("!HHIIBBHHH", packet))
             i += 1
             count = count + 1
             size += len(data.decode())
-            s.send(data)
+            s.send(packet + data)
             if (time.time() - start_time) > tim:
                 stop_time = time.time()
                 duration = stop_time - start_time
