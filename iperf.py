@@ -420,7 +420,7 @@ def Main():
         description='IPERF like script, IP address of socket on/to which you want to connect is REQUIRED, also option if you want to run SERVER or CLIENT')
     parser.add_argument('-s', '--server', help='If you want to run server', action='store_true', default=False)
     parser.add_argument('-c', '--client', help='If you want to run client', action='store_true', default=False)
-    parser.add_argument('-i', '--ip',
+    parser.add_argument('-a', '--ip',
                         help='host/serv ip address, if you write ip address on server, server will expect connection only from this particular IP, if multicast is enabled and we '
                              ' pass something here, server will bind with mcastgrp addr ! ', nargs='?', type=str,
                         default='0.0.0.0')
@@ -437,6 +437,7 @@ def Main():
     parser.add_argument('-T', '--TCP', help='If you want to use TCP ', action='store_true', default=False)
     parser.add_argument('-U', '--UDP', help='If you want to use UDP', action='store_true', default=False)
     parser.add_argument('-d', '--owd', help='One way delay', action='store_true', default=False)
+    parser.add_argument('-i', '--interval', help='Interval', default=0)
 
     args = parser.parse_args()
 
