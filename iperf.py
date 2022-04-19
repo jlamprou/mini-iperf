@@ -125,10 +125,8 @@ def ServerUDP(PORT, SNDB, BSIZE, HOST=0):
             header = data[:20]
             data = data[20:]
             header = struct.unpack("!HHIIBBHHH", header)
-            if (header[3] - last_datagram_sequence) > 1:
-                lostdatagrams += header[3] - last_datagram_sequence
-            last_datagram_sequence = header[3]
-            print(header)
+            lostdatagrams = lostdatagrams + (header[2] - last_datagram_sequence - 1)
+            last_datagram_sequence = header[2]
             count = count + 1
             size += len(data)
 
@@ -137,7 +135,7 @@ def ServerUDP(PORT, SNDB, BSIZE, HOST=0):
         trafic = ((size * 8.0) / 1000000) / duration
         print(
             'Reading from socket in: (%f) s, : in (%d) segments (%d)((%f) mbit/s)\n' % (duration, count, size, trafic))
-        print("Lost Datagrams: ",lostdatagrams)
+        print("Lost Datagrams: ", lostdatagrams)
 
     s.close()
 
