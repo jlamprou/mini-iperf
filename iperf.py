@@ -130,8 +130,6 @@ def ServerUDP(PORT, RCVB, BSIZE, HOST=0):
             header = data[:20]
             data = data[20:]
             header = struct.unpack("!HHIIBBHHH", header)
-            print('last '+str(last_datagram_sequence))
-            print('curr '+str(header[2]))
             lostdatagrams = lostdatagrams + (header[2] - last_datagram_sequence - 1)
             last_datagram_sequence = header[2]
             count = count + 1
@@ -410,7 +408,7 @@ def Main():
                         help='host/serv ip address, if you write ip address on server, server will expect connection only from this particular IP, if multicast is enabled and we '
                              ' pass something here, server will bind with mcastgrp addr ! ', nargs='?', type=str,
                         default='0.0.0.0')
-    parser.add_argument('-b', '--bandwidth', help='Bandwidth bits per sec', type=int, default=1000,
+    parser.add_argument('-b', '--bandwidth', help='Bandwidth bits per sec', type=int, default=1000000,
                         nargs='?')
     parser.add_argument('-p', '--port', help='Port number, default port nr. is 8888', type=int, default=8888, nargs='?')
     parser.add_argument('-w', '--window', help='Lenght of buffers to read and write, default = 128000', nargs='?',
