@@ -125,6 +125,7 @@ def ServerUDP(PORT, RCVB, BSIZE, HOST=0):
             else:
                 curr_time = time.time()
                 flag = 1
+                print(curr_time - prev_time)
                 jitter = + curr_time - prev_time
 
             header = data[:20]
@@ -144,7 +145,7 @@ def ServerUDP(PORT, RCVB, BSIZE, HOST=0):
             'Reading from socket in: (%f) s, : in (%d) segments (%d)((%f) K/s)\n' % (duration, count, size, trafic))
         print("Lost Datagrams Percentage: ", lostdatagrams*100/last_datagram_sequence," %")
         jitter = (jitter / count)
-        print('Average Jitter : ' + str(jitter) + ' ms')
+        print('Average Jitter : ' + str(jitter) + 's')
 
     s.close()
 
@@ -329,9 +330,7 @@ def ServerTCP(PORT, RCVB, BSIZE, HOST=0):
         duration = stop_time - start_time
         trafic = (size * 0.001) / duration
         # print('lost = ' + str(lost))
-        print(
-            'Reading from socket in: (%f) s, : in (%d) segments (%d)((%f) K/s)\n' % (duration, count, size, trafic))
-
+        print('Reading from socket in: (%f) s, : in (%d) segments (%d)((%f) K/s)\n' % (duration, count, size, trafic))
     print('Sended %d segments \n' % i)
     s.close()
 
@@ -440,8 +439,17 @@ def Main():
     parser.add_argument('-U', '--UDP', help='If you want to use UDP', action='store_true', default=False)
     parser.add_argument('-d', '--owd', help='One way delay', action='store_true', default=False)
     parser.add_argument('-i', '--interval', help='Interval', default=0)
+    parser.add_argument('-f', '--output_file', help='Output file', default=0)
 
     args = parser.parse_args()
+
+    # f = open(args.f, "w")
+
+    if (args.output_file):
+        sys.stdout = open(args.output_file, "w")
+
+
+
 
     if args.server and args.TCP and not args.client and not args.UDP:
         ServerTCP(args.port, args.window, args.buffsize, args.ip)
