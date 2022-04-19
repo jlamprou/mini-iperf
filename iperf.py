@@ -2,7 +2,6 @@
 
 
 import argparse
-import array
 import socket
 import struct
 import sys
@@ -17,11 +16,12 @@ def ConvertBytesToSeconds(numBytes, maxSendRateBytesPerSecond):
     return float(numBytes) / maxSendRateBytesPerSecond
 
 
-def ServerUDP(PORT, RCVB, BSIZE, HOST=0):
+def ServerUDP(PORT, RCVB, BSIZE, INTERVAL, HOST=0):
     serv = HOST  # IP address which server expect the connection will come from
     port = PORT  # port = PORT  # Arbitrary non-privileged port
     rcvbuff = RCVB  # Size of Socket RCVBUFFOR
     buff = BSIZE  # size of data in udp datagram
+    interval = int(INTERVAL)
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
     except socket.error as serror:
@@ -97,6 +97,7 @@ def ServerUDP(PORT, RCVB, BSIZE, HOST=0):
         jitter = 0
         while 1:
             try:
+                interval_time = time.time()
                 data, servaddr = s.recvfrom(buff)
 
 
@@ -125,6 +126,7 @@ def ServerUDP(PORT, RCVB, BSIZE, HOST=0):
             else:
                 curr_time = time.time()
                 flag = 1
+                jitter_interval = curr_time - prev_time
                 jitter = + curr_time - prev_time
 
             header = data[:20]
@@ -134,6 +136,18 @@ def ServerUDP(PORT, RCVB, BSIZE, HOST=0):
             last_datagram_sequence = header[2]
             count = count + 1
             size += len(data)
+            if interval != 0 and round(time.time() - interval_time) == interval:
+                stop_time = time.time()
+                duration = (stop_time - start_time)
+                trafic = (size * 0.001) / duration
+                if lostdatagrams == -1:
+                    lostdatagrams = 0
+                print(
+                    'Reading from socket in: (%f) s, : in (%d) segments (%d)((%f) K/s)\n' % (
+                        duration, count, size, trafic))
+                print("Lost Datagrams Percentage: ", lostdatagrams * 100 / last_datagram_sequence, " %")
+                jitter = (jitter / count)
+                print('Jitter : ' + str(jitter_interval) + ' ms')
 
         stop_time = time.time()
         duration = (stop_time - start_time)
@@ -142,14 +156,14 @@ def ServerUDP(PORT, RCVB, BSIZE, HOST=0):
             lostdatagrams = 0
         print(
             'Reading from socket in: (%f) s, : in (%d) segments (%d)((%f) K/s)\n' % (duration, count, size, trafic))
-        print("Lost Datagrams Percentage: ", lostdatagrams*100/last_datagram_sequence," %")
+        print("Lost Datagrams Percentage: ", lostdatagrams * 100 / last_datagram_sequence, " %")
         jitter = (jitter / count)
         print('Average Jitter : ' + str(jitter) + ' ms')
 
     s.close()
 
 
-def ClientUDP(HOST, PORT, SNDB, BSIZE, TIME, BNDWIDTH,DELAY):
+def ClientUDP(HOST, PORT, SNDB, BSIZE, TIME, BNDWIDTH, DELAY):
     serv = HOST  # IP addr of server to which we want to connect
     port = PORT  # port = PORT  # Arbitrary non-privileged port
     sndbuff = SNDB  # Size of Socket RCVBUFFOR
@@ -187,7 +201,7 @@ def ClientUDP(HOST, PORT, SNDB, BSIZE, TIME, BNDWIDTH,DELAY):
             owd_start = time.time()
             s.sendto(intro, (serv, port))
             ack, servaddr = s.recvfrom(10)
-            # foo = int(ack.decode())        
+            # foo = int(ack.decode())
             ack = ack.decode()
             # foo = 5
             if ack == 'ack':
@@ -200,11 +214,8 @@ def ClientUDP(HOST, PORT, SNDB, BSIZE, TIME, BNDWIDTH,DELAY):
             print('Error not related to socket occured ! Error: ', msg)
 
     if DELAY == 1:
-        print('One way delay: ',((owd_end - owd_start)/2))
-    else :
-
-    
-
+        print('One way delay: ', ((owd_end - owd_start) / 2))
+    else:
 
         i = 0
         count = 0  # Nr of datagrams received
@@ -262,11 +273,12 @@ def ClientUDP(HOST, PORT, SNDB, BSIZE, TIME, BNDWIDTH,DELAY):
     s.close()
 
 
-def ServerTCP(PORT, RCVB, BSIZE, HOST=0):
+def ServerTCP(PORT, RCVB, BSIZE, INTERVAL, HOST=0):
     host = HOST  # IP address which server expect the connection will come from
     port = PORT  # PORT nr. on which server will be open for clients
     recvbuff = RCVB  # size of socket SEND buffor
     buffsize = BSIZE  # size od data in tcp segment
+    interval = int(INTERVAL)
 
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP)
@@ -311,6 +323,7 @@ def ServerTCP(PORT, RCVB, BSIZE, HOST=0):
         start_time = time.time()  # Countdown starts here !
 
         while 1:
+            interval_time = time.time()
             try:
                 x = conn.recv(buffsize)
 
@@ -324,6 +337,13 @@ def ServerTCP(PORT, RCVB, BSIZE, HOST=0):
             data = len(x)
             count = count + 1
             size += data
+            if interval != 0 and round(time.time() - interval_time) == interval:
+                stop_time = time.time()
+                duration = stop_time - start_time
+                trafic = (size * 0.001) / duration
+                print(
+                    'Reading from socket in: (%f) s, : in (%d) segments (%d)((%f) K/s)\n' % (
+                        duration, count, size, trafic))
 
         stop_time = time.time()
         duration = stop_time - start_time
@@ -336,7 +356,7 @@ def ServerTCP(PORT, RCVB, BSIZE, HOST=0):
     s.close()
 
 
-def ClientTCP(HOST, PORT, SNDB, BSIZE, TIME,DELAY):
+def ClientTCP(HOST, PORT, SNDB, BSIZE, TIME, DELAY):
     port = PORT  # port = PORT  # Arbitrary non-privileged port
     sendbuff = SNDB  # Size of Socket RCVBUFFOR
     buff = BSIZE  # size of data in tcp seg
@@ -380,27 +400,15 @@ def ClientTCP(HOST, PORT, SNDB, BSIZE, TIME,DELAY):
     start_time = time.time()
     while 1:
         try:
-            packet = struct.pack(
-                '!HHIIBBHHH',
-                s.getsockname()[1],  # Source Port
-                port,  # Destination Port
-                count,  # Sequence Number
-                0,  # Acknoledgement Number
-                5 << 4,  # Data Offset
-                0,  # Flags
-                0,  # Window
-                0,  # Checksum (initial value)
-                0  # Urgent pointer
-            )
             i += 1
             count = count + 1
             size += len(data.decode())
             owd_start = time.time()
-            s.send(packet + data)
+            s.send(data)
             owd_end = time.time()
 
             if DELAY == 1:
-                print('One way delay: ',((owd_end - owd_start)/2))
+                print('One way delay: ', ((owd_end - owd_start) / 2))
                 break
 
             if (time.time() - start_time) > tim:
@@ -444,13 +452,13 @@ def Main():
     args = parser.parse_args()
 
     if args.server and args.TCP and not args.client and not args.UDP:
-        ServerTCP(args.port, args.window, args.buffsize, args.ip)
+        ServerTCP(args.port, args.window, args.buffsize, args.interval, args.ip)
     elif args.server and args.UDP and not args.client and not args.TCP:
-        ServerUDP(args.port, args.window, args.buffsize, args.ip)
+        ServerUDP(args.port, args.window, args.buffsize, args.interval, args.ip)
     elif args.client and args.UDP and not args.server and not args.TCP:
-        ClientUDP(args.ip, args.port, args.window, args.buffsize, args.time, args.bandwidth,args.owd)
+        ClientUDP(args.ip, args.port, args.window, args.buffsize, args.time, args.bandwidth, args.owd)
     elif args.client and args.TCP and not args.server and not args.UDP:
-        ClientTCP(args.ip, args.port, args.window, args.buffsize, args.time,args.owd)
+        ClientTCP(args.ip, args.port, args.window, args.buffsize, args.time, args.owd)
     elif args.TCP and args.UDP:
         print('You should chose either TCP or UDP ! ')
     elif args.server and args.client:
