@@ -126,7 +126,6 @@ def ServerUDP(PORT, RCVB, BSIZE, INTERVAL, HOST=0):
             else:
                 curr_time = time.time()
                 flag = 1
-                print(curr_time - prev_time)
                 jitter_interval = curr_time - prev_time
                 jitter = + curr_time - prev_time
 
